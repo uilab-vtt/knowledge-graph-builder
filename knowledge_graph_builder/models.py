@@ -27,8 +27,10 @@ class Property(Base):
     value = Column(Text)
     time_start = Column(Float)
     time_end = Column(Float)
-    source = relationship(Item)
-    target = relationship(Item)
+    source_item_id = Column(Integer, ForeignKey('item.id'))
+    target_item_id = Column(Integer, ForeignKey('item.id'))
+    source = relationship(Item, foreign_keys=[source_item_id])
+    target = relationship(Item, foreign_keys=[target_item_id])
 
 engine = create_engine(config.SQLALCHEMY_ENGINE)
 
