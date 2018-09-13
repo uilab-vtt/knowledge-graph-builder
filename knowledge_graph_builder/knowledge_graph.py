@@ -1,7 +1,7 @@
-
-import .config as config
-
+from . import config
 
 class KnowledgeGraph:
     def __init__(self):
-        
+        pass
+
+    
