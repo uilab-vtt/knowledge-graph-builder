@@ -1,6 +1,6 @@
 from knowledge_graph_builder.knowledge_graph import KnowledgeGraph
 from knowledge_graph_builder.models import Item, Property
-
+from sqlalchemy.orm.exc import NoResultFound
 kg = KnowledgeGraph()
 
 ross = Item(
@@ -15,9 +15,18 @@ ross = Item(
     y_end=300.7
 )
 
-kg.session.add(ross)
-kg.session.commit()
+# kg.session.add(ross)
+# kg.session.commit()
 
 items = kg.session.query(Item).all()
 for item in items:
     print(item.value)
+
+item = kg.session.query(Item).filter_by(id_str='ross_geller').one()
+print(item)
+
+try:
+    item = kg.session.query(Item).filter_by(id_str='ross_gellera').one()
+    print(item)
+except NoResultFound as e:
+    print('nrf', e)

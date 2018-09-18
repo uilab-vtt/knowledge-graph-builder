@@ -9,7 +9,7 @@ Base = declarative_base()
 class Item(Base):
     __tablename__ = 'item'
     id = Column(Integer, primary_key=True)
-    id_str = Column(String(250))
+    id_str = Column(String(250), unique=True)
     classname = Column(String(250), nullable=False)
     value = Column(Text)
     time_start = Column(Float)
