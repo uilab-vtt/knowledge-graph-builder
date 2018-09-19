@@ -1,7 +1,6 @@
-from sqlalchemy import Column, ForeignKey, Integer, String, Float, Text
+from sqlalchemy import Column, ForeignKey, Integer, String, Float, Text, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
-from sqlalchemy import create_engine
 from . import config
 
 Base = declarative_base()
@@ -12,17 +11,30 @@ class Item(Base):
     id_str = Column(String(250), unique=True)
     classname = Column(String(250), nullable=False)
     value = Column(Text)
+
+class ValidTime(Base):
+    __tablename__ = 'valid_time'
+    id = Column(Integer, primary_key=True)
     time_start = Column(Float)
     time_end = Column(Float)
+    item_id = Column(Integer, ForeignKey('item.id'))
+    item = relationship(Item, foreign_keys=[item_id])
+
+class Box(Base):
+    __tablename__ = 'box'
+    id = Column(Integer, primary_key=True)
+    time = Column(Float)
     x_start = Column(Integer)
     x_end = Column(Integer)
     y_start = Column(Integer)
     y_end = Column(Integer)
+    item_id = Column(Integer, ForeignKey('item.id'))
+    item = relationship(Item, foreign_keys=[item_id])
 
 class Property(Base):
     __tablename__ = 'property'
     id = Column(Integer, primary_key=True)
-    id_str = Column(String(250))
+    id_str = Column(String(250), unique=True)
     classname = Column(String(250), nullable=False)
     value = Column(Text)
     time_start = Column(Float)
