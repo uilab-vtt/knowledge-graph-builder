@@ -21,4 +21,5 @@ def init_logger():
     logger.addHandler(file_handler)
     logger.addHandler(console_handler)
 
-init_logger()
+if logger is None:
+    init_logger()
