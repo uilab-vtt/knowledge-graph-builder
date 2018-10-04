@@ -1,11 +1,76 @@
+import json
+from sqlalchemy import and_, or_
 from sqlalchemy.orm.exc import NoResultFound
+
 from .models import get_sessionmaker, Item, ValidTime, Box, Property
+from .logger import logger
 from . import config
 
 class KnowledgeGraph:
     def __init__(self):
         self.Sessionmaker = get_sessionmaker()
         self.session = self.Sessionmaker()
+    
+    def get_overlapped_items_by_coordinate(self, coordinate, seconds):
+        x_start, y_start, x_end, y_end = coordinate
+        time_start = seconds - config.MERGE_TIME_WINDOW
+        time_end = seconds + config.MERGE_TIME_WINDOW
+        rows = self.session.query(Item, ValidTime, Box).filter(and_(
+            Item.id == ValidTime.item_id,
+            Item.id == Box.item_id,
+            or_(
+                and_(
+                    ValidTime.time_start >= time_start,
+                    ValidTime.time_start <= time_end
+                ),
+                and_(
+                    ValidTime.time_end >= time_start,
+                    ValidTime.time_end <= time_end
+                )
+            ),
+            Box.time >= time_start,
+            Box.time <= time_end,
+            or_(
+                and_(
+                    Box.x_start >= x_start,
+                    Box.x_start <= x_end
+                ),
+                and_(
+                    Box.x_end >= x_start,
+                    Box.x_end <= x_end
+                )
+            ),
+            or_(
+                and_(
+                    Box.y_start >= y_start,
+                    Box.y_start <= y_end
+                ),
+                and_(
+                    Box.y_end >= y_start,
+                    Box.y_end <= y_end
+                )
+            )
+        ))
+        return rows
+
+    def is_coordinates_mergeable(self, coordinate1, coordinate2):
+        c1_x_start, c1_y_start, c1_x_end, c1_y_end = coordinate1
+        c2_x_start, c2_y_start, c2_x_end, c2_y_end = coordinate2
+        overlap_width = max(
+            0, 
+            min(c1_x_end, c2_x_end) - max(c1_x_start, c2_x_start)
+        )
+        overlap_height = max(
+            0, 
+            min(c1_y_end, c2_y_end) - max(c1_y_start, c2_y_start)
+        )
+        c1_area = (c1_x_end - c1_x_start) * (c1_y_end - c1_y_start)
+        c2_area = (c2_x_end - c2_x_start) * (c2_y_end - c2_y_start)
+        overlap_area = overlap_width * overlap_height
+        return (
+            (overlap_area > c1_area * config.MERGE_OVERLAP_THRESHOLD) and
+            (overlap_area > c2_area * config.MERGE_OVERLAP_THRESHOLD)
+        )
 
     def get_item_by_id_str(self, id_str):
         try:
@@ -13,52 +78,182 @@ class KnowledgeGraph:
         except NoResultFound:
             return None
 
-    # def get_item_by_coordinate(self, coordinate, seconds):
-    #     try:
-    #         ItemValidTime.query.filter(
-    #             Patient.mother.has(phenoscore=10))
+    def get_abstract_item(self, classname, label):
+        try:
+            return self.session.query(Item).filter_by(
+                classname=classname,
+                label=label,
+                is_abstract=True,
+            ).one()
+        except NoResultFound:
+            return None
 
+    def get_or_create_video_item(self):
+        item = self.get_item_by_id_str('_video')
+        if item is None:
+            item = Item(
+                id_str='_video',
+                classname='video',
+                label='video',
+                is_abstract=True,
+            )
+            self.session.add(item)
+            self.session.commit()
+        return item
 
-    # def add_object_label(self, label):
-    #     if label['type'] == 'object':
-    #         # Overwrite the entity
-    #         entity = self.get_object_by_coord(label['seconds'], label['coordinates'])
-    #         entity['entity_type'] = 'object'
-    #         entity['class'] = label['class']
-    #         entity['value'] = {'label': label['label']}
+    def get_or_create_abstract_item(self, classname, label):
+        item = self.get_abstract_item(classname, label)
+        if item is None:
+            item = Item(
+                classname=classname,
+                label=label,
+                is_abstract=True
+            )
+            self.session.add(item)
+            self.session.commit()
+        return item
 
-    #         if 'id' in label and label['id'] is not None:
-    #             if 'input_ids' not in entity:
-    #                 entity['input_ids'] = []
-    #             entity['input_ids'].append(label['id'])
-    #             self.ids[label['id']] = entity['id']
+    def create_property(self, classname, seconds, source, target, relation=None):
+        prop = Property(
+            classname=classname,
+            time_start=seconds,
+            time_end=seconds,
+            source=source,
+            target=target,
+            relation=relation,
+        )
+        self.session.add(prop)
+        self.session.commit()
+        return prop
 
-    #         coord_entity = self.get_coordinate_object(label['seconds'], label['coordinates'])
-    #         prop_entity = self.get_property(label['seconds'], 'located_at', entity, coord_entity)
+    def get_item_by_coordinate(self, coordinate, seconds):
+        rows = self.get_overlapped_items_by_coordinate(coordinate, seconds)
+        for item, valid_time, box in rows:
+            box_coordinate = (
+                box.x_start,
+                box.y_start,
+                box.x_end,
+                box.y_end,
+            )
+            if self.is_coordinates_mergeable(coordinate, box_coordinate):
+                return item
+        return None
 
-            
-    #     if 'input_ids' not in entity:
-    #                 entity['input_ids'] = []
-    #             entity['input_ids'].append(label['id'])
-    #             self.ids[label['id']] = entity['id']
+    def get_absolute_coordinate(self, coordinate):
+        x, y, width, height = coordinate
+        return x, y, x + width, y + height
 
-    #         coord_entity = self.get_coordinate_object(label['seconds'], label['coordinates'])
-    #         prop_entity = self.get_property(label['seconds'], 'located_at', entity, coord_entity)
+    def get_item_by_indicator(self, indicator, seconds):
+        if 'id' in indicator:
+            return self.get_item_by_id_str(indicator['id'])
+        elif 'coordinates' in indicator:
+            abs_coord = self.get_absolute_coordinate(
+                indicator['coordinates']
+            )
+            return self.get_item_by_coordinate(self, abs_coord, seconds)
+        else:
+            logger.error(
+                'Failed to find an object with object indicator "%s"' 
+                % json.dumps(indicator)
+            )
+            return None
+
+    def add_object_label(self, label):
+        abs_coord = self.get_absolute_coordinate(label['coordinates'])
+        item = None
+        if 'id' in label:
+            item = self.get_item_by_id_str(label['id']) 
+        if item is None:
+            item = self.get_item_by_coordinate(abs_coord, label['seconds'])
+        if item is None:
+            item = Item()
+        item.classname = label['class']
+        item.label = label['label']
+        if 'id' in label and not item.id_str:
+            item.id_str = label['id']
+        self.session.add(item)
+        valid_time = ValidTime(
+            time_start=label['seconds'],
+            time_end=label['seconds'],
+            item=item,
+        )
+        self.session.add(valid_time)
+        box = Box(
+            time=label['seconds'],
+            x_start=abs_coord[0],
+            x_end=abs_coord[2],
+            y_start=abs_coord[1],
+            y_end=abs_coord[3],
+        )
+        self.session.add(box)
+        self.session.commit()
 
     def add_behavior_label(self, label):
-        pass
+        item = self.get_item_by_indicator(
+            label['object'], 
+            label['seconds'],
+        )
+        abstract_item = self.get_or_create_abstract_item(
+            'behavior', 
+            label['class'],
+        )
+        self.create_property('do', label['seconds'], item, abstract_item)
 
     def add_emotion_label(self, label):
-        pass
+        item = self.get_item_by_indicator(
+            label['object'],
+            label['seconds'],
+        )
+        abstract_item = self.get_or_create_abstract_item(
+            'emotion',
+            label['class'],
+        )
+        self.create_property('feel', label['seconds'], item, abstract_item)
 
     def add_relation_label(self, label):
-        pass
+        relation_item = self.get_or_create_abstract_item(
+            label['class'],
+            label['subclass'],
+        )
+        source_item = self.get_item_by_indicator(
+            label['source'],
+            label['seconds'],
+        )
+        target_item = self.get_item_by_indicator(
+            label['target'],
+            label['seconds'],
+        )
+        self.create_property(
+            'related_to',
+            label['seconds'],
+            source_item,
+            target_item,
+            relation_item,
+        )
 
     def add_location_label(self, label):
-        pass
+        item = self.get_or_create_abstract_item(
+            'location',
+            label['class'],
+        )
+        self.create_property(
+            'location_of',
+            label['seconds'],
+            item,
+            self.get_or_create_video_item(),
+        )
 
     def add_sound_label(self, label):
-        pass
+        item = self.get_or_create_abstract_item(
+            'sound',
+            label['class'],
+        )
+        self.create_property(
+            'sound_of',
+            label['seconds'],
+            item,
+            self.get_or_create_video_item(),
+        )
 
     def add_label(self, label):
         if label['type'] == 'object':
