@@ -10,6 +10,18 @@ class KnowledgeGraph:
     def __init__(self):
         self.Sessionmaker = get_sessionmaker()
         self.session = self.Sessionmaker()
+
+    def get_all_items(self):
+        return self.session.query(Item).all()
+
+    def get_all_valid_times(self):
+        return self.session.query(ValidTime).all()
+
+    def get_all_boxes(self):
+        return self.session.query(Box).all()
+
+    def get_all_properties(self):
+        return self.session.query(Property).all()
     
     def get_overlapped_items_by_coordinate(self, coordinate, seconds):
         x_start, y_start, x_end, y_end = coordinate
@@ -184,6 +196,7 @@ class KnowledgeGraph:
             x_end=abs_coord[2],
             y_start=abs_coord[1],
             y_end=abs_coord[3],
+            item=item,
         )
         self.session.add(box)
         self.session.commit()
@@ -268,3 +281,17 @@ class KnowledgeGraph:
             self.add_location_label(label)
         elif label['type'] == 'sound':
             self.add_sound_label(label)
+
+    def dump_to_dict_iter(self):
+        for item in self.get_all_items():
+            yield item.as_dict()
+        for valid_time in self.get_all_valid_times():
+            yield valid_time.as_dict()
+        for box in self.get_all_boxes():
+            yield box.as_dict()
+        for prop in self.get_all_properties():
+            yield prop.as_dict()
+
+    def dump_to_json_iter(self):
+        for d in self.dump_to_dict_iter():
+            yield json.dumps(d)
