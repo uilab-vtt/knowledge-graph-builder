@@ -16,6 +16,17 @@ class Item(Base):
     value = Column(Text, default='')
     is_abstract = Column(Boolean, default=False)
 
+    def as_dict(self):
+        return {
+            'type': 'item',
+            'id': self.id,
+            'id_str': self.id_str,
+            'class': self.classname,
+            'label': self.label,
+            'value': self.value,
+            'is_abstract': self.is_abstract,
+        }
+
 class ValidTime(Base):
     __tablename__ = 'valid_time'
     id = Column(Integer, primary_key=True)
@@ -23,6 +34,15 @@ class ValidTime(Base):
     time_end = Column(Float)
     item_id = Column(Integer, ForeignKey('item.id'))
     item = relationship(Item, foreign_keys=[item_id])
+
+    def as_dict(self):
+        return {
+            'type': 'valid_time',
+            'id': self.id,
+            'time_start': self.time_start,
+            'time_end': self.time_end,
+            'item_id': self.item_id,
+        }
 
 class Box(Base):
     __tablename__ = 'box'
@@ -34,6 +54,18 @@ class Box(Base):
     y_end = Column(Integer)
     item_id = Column(Integer, ForeignKey('item.id'))
     item = relationship(Item, foreign_keys=[item_id])
+
+    def as_dict(self):
+        return {
+            'type': 'box',
+            'id': self.id,
+            'time': self.time,
+            'x_start': self.x_start,
+            'x_end': self.x_end,
+            'y_start': self.y_start,
+            'y_end': self.y_end,
+            'item_id': self.item_id,
+        }
 
 class Property(Base):
     __tablename__ = 'property'
@@ -49,6 +81,20 @@ class Property(Base):
     source = relationship(Item, foreign_keys=[source_item_id])
     target = relationship(Item, foreign_keys=[target_item_id])
     relation = relationship(Item, foreign_keys=[relation_item_id])
+
+    def as_dict(self):
+        return {
+            'type': 'property',
+            'id': self.id,
+            'id_str': self.id_str,
+            'classname': self.classname,
+            'value': self.value,
+            'time_start': self.time_start,
+            'time_end': self.time_end,
+            'source_item_id': self.source_item_id,
+            'target_item_id': self.target_item_id,
+            'relation_item_id': self.relation_item_id,
+        }
 
 def get_engine():
     return create_engine(config.SQLALCHEMY_ENGINE)
