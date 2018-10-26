@@ -162,7 +162,7 @@ class KnowledgeGraph:
             abs_coord = self.get_absolute_coordinate(
                 indicator['coordinates']
             )
-            return self.get_item_by_coordinate(self, abs_coord, seconds)
+            return self.get_item_by_coordinate(abs_coord, seconds)
         else:
             logger.error(
                 'Failed to find an object with object indicator "%s"' 
