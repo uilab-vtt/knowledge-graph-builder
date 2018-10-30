@@ -125,8 +125,9 @@ class KnowledgeGraph:
             self.session.commit()
         return item
 
-    def create_property(self, classname, seconds, source, target, relation=None):
+    def get_or_create_property(self, classname, seconds, source, target, relation=None, id_str=None):
         prop = Property(
+            id_str=id_str,
             classname=classname,
             time_start=seconds,
             time_end=seconds,
@@ -170,6 +171,45 @@ class KnowledgeGraph:
             )
             return None
 
+    def get_or_create_valid_time(self, seconds, item):
+        seconds_lb = seconds - config.MERGE_TIME_WINDOW
+        seconds_ub = seconds + config.MERGE_TIME_WINDOW
+        valid_time = self.session.query(ValidTime).filter(
+            and_(
+                or_(
+                    and_(
+                        ValidTime.time_start <= seconds,
+                        ValidTime.time_end >= seconds,
+                    ),
+                    and_(
+                        ValidTime.time_start <= seconds,
+                        ValidTime.time_end >= seconds_lb,
+                    ),
+                    and_(
+                        ValidTime.time_start <= seconds_ub,
+                        ValidTime.time_end >= seconds,
+                    ),
+                ),
+                ValidTime.item_id == item.id,
+            )
+        ).first()
+        if valid_time is not None:
+            if valid_time.time_start <= seconds and valid_time.time_end >= seconds:
+                return valid_time
+            elif valid_time.time_start <= seconds and valid_time.time_end >= seconds_lb:
+                if valid_time.time_end < seconds:
+                    valid_time.time_end = seconds  
+            elif valid_time.time_start <= seconds_ub and valid_time.time_end >= seconds:
+                if valid_time.time_start > seconds:
+                    valid_time.time_start = seconds
+            return valid_time
+        else:
+            return ValidTime(
+                time_start=seconds,
+                time_end=seconds,
+                item=item,
+            )
+
     def add_object_label(self, label):
         abs_coord = self.get_absolute_coordinate(label['coordinates'])
         item = None
@@ -184,11 +224,7 @@ class KnowledgeGraph:
         if 'id' in label and not item.id_str:
             item.id_str = label['id']
         self.session.add(item)
-        valid_time = ValidTime(
-            time_start=label['seconds'],
-            time_end=label['seconds'],
-            item=item,
-        )
+        valid_time = self.get_or_create_valid_time(label['seconds'], item)
         self.session.add(valid_time)
         box = Box(
             time=label['seconds'],
@@ -210,7 +246,7 @@ class KnowledgeGraph:
             'behavior', 
             label['class'],
         )
-        self.create_property('do', label['seconds'], item, abstract_item)
+        self.get_or_create_property('do', label['seconds'], item, abstract_item)
 
     def add_emotion_label(self, label):
         item = self.get_item_by_indicator(
@@ -221,7 +257,7 @@ class KnowledgeGraph:
             'emotion',
             label['class'],
         )
-        self.create_property('feel', label['seconds'], item, abstract_item)
+        self.get_or_create_property('feel', label['seconds'], item, abstract_item)
 
     def add_relation_label(self, label):
         relation_item = self.get_or_create_abstract_item(
@@ -236,7 +272,7 @@ class KnowledgeGraph:
             label['target'],
             label['seconds'],
         )
-        self.create_property(
+        self.get_or_create_property(
             'related_to',
             label['seconds'],
             source_item,
@@ -249,7 +285,7 @@ class KnowledgeGraph:
             'location',
             label['class'],
         )
-        self.create_property(
+        self.get_or_create_property(
             'location_of',
             label['seconds'],
             item,
@@ -261,7 +297,7 @@ class KnowledgeGraph:
             'sound',
             label['class'],
         )
-        self.create_property(
+        self.get_or_create_property(
             'sound_of',
             label['seconds'],
             item,
