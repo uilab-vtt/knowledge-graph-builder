@@ -125,20 +125,6 @@ class KnowledgeGraph:
             self.session.commit()
         return item
 
-    def get_or_create_property(self, classname, seconds, source, target, relation=None, id_str=None):
-        prop = Property(
-            id_str=id_str,
-            classname=classname,
-            time_start=seconds,
-            time_end=seconds,
-            source=source,
-            target=target,
-            relation=relation,
-        )
-        self.session.add(prop)
-        self.session.commit()
-        return prop
-
     def get_item_by_coordinate(self, coordinate, seconds):
         rows = self.get_overlapped_items_by_coordinate(coordinate, seconds)
         for item, valid_time, box in rows:
@@ -209,6 +195,67 @@ class KnowledgeGraph:
                 time_end=seconds,
                 item=item,
             )
+
+    def get_or_create_property(self, classname, seconds, source, target, relation=None, id_str=None, value=None):
+        seconds_lb = seconds - config.MERGE_TIME_WINDOW
+        seconds_ub = seconds + config.MERGE_TIME_WINDOW
+        query_filter = and_(
+            or_(
+                and_(
+                    Property.time_start <= seconds,
+                    Property.time_end >= seconds,
+                ),
+                and_(
+                    Property.time_start <= seconds,
+                    Property.time_end >= seconds_lb,
+                ),
+                and_(
+                    Property.time_start <= seconds_ub,
+                    Property.time_end >= seconds,
+                ),
+            ),
+            Property.classname == classname,
+            Property.source_item_id == source.id,
+            Property.target_item_id == target.id,
+        )
+        if relation is not None:
+            query_filter = and_(
+                query_filter,
+                Property.relation_item_id == relation.id,
+            )
+        if value is not None:
+            query_filter = and_(
+                query_filter,
+                Property.value == value,
+            )
+        if id_str is not None:
+            query_filter = and_(
+                query_filter,
+                Property.id_str == id_str,
+            )
+        prop = self.session.query(Property).filter(query_filter).first()
+        if prop is not None:
+            if prop.time_start <= seconds and prop.time_end >= seconds:
+                return prop
+            elif prop.time_start <= seconds and prop.time_end >= seconds_lb:
+                if prop.time_end < seconds:
+                    prop.time_end = seconds
+            elif prop.time_start <= seconds_ub and prop.time_end >= seconds:
+                if prop.time_start > seconds:
+                    prop.time_start = seconds
+        else:
+            prop = Property(
+                id_str=id_str,
+                classname=classname,
+                time_start=seconds,
+                time_end=seconds,
+                source=source,
+                target=target,
+                relation=relation,
+            )
+        self.session.add(prop)
+        self.session.commit()
+        return prop
 
     def add_object_label(self, label):
         abs_coord = self.get_absolute_coordinate(label['coordinates'])
