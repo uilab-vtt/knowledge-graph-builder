@@ -2,14 +2,16 @@ import json
 from sqlalchemy import and_, or_
 from sqlalchemy.orm.exc import NoResultFound
 
-from .models import get_sessionmaker, Item, ValidTime, Box, Property
+from .models import get_sessionmaker, Item, ItemSimilarityRelation, ValidTime, Box, Property
 from .logger import logger
+from .word_model import WordModel
 from . import config
 
 class KnowledgeGraph:
     def __init__(self):
         self.Sessionmaker = get_sessionmaker()
         self.session = self.Sessionmaker()
+        self.word_model = WordModel()
 
     def get_all_items(self):
         return self.session.query(Item).all()
@@ -22,6 +24,37 @@ class KnowledgeGraph:
 
     def get_all_properties(self):
         return self.session.query(Property).all()
+
+    def get_all_similarities(self):
+        return self.session.query(ItemSimilarityRelation).all()
+
+    def set_item_similarities(self):
+        rows = self.session.execute('''
+            SELECT   MIN(a.id) a, a.classname a, b.id b, b.classname b
+            FROM     item a JOIN item b ON a.id <> b.id AND b.ID > a.ID
+            GROUP BY b.ID
+        ''')
+        batch_count = 0
+
+        def sanitize(word):
+            return word.lower().replace('-', ' ').replace('_', ' ')
+        
+        for id1, classname1, id2, classname2 in rows:
+            similarity = self.word_model.get_word_similarity(
+                sanitize(classname1), 
+                sanitize(classname2),
+            )
+            if similarity is not None:
+                self.session.add(ItemSimilarityRelation(
+                    similarity=similarity,
+                    item_id=id1,
+                    another_item_id=id2,
+                ))
+                batch_count += 1
+                if batch_count >= 100:
+                    self.session.commit()
+                    batch_count = 0
+        self.session.commit()
     
     def get_overlapped_items_by_coordinate(self, coordinate, seconds):
         x_start, y_start, x_end, y_end = coordinate
@@ -374,6 +407,8 @@ class KnowledgeGraph:
             yield box.as_dict()
         for prop in self.get_all_properties():
             yield prop.as_dict()
+        for similarity in self.get_all_similarities():
+            yield similarity.as_dict()
 
     def dump_to_json_iter(self):
         for d in self.dump_to_dict_iter():

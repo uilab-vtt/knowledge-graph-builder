@@ -1,6 +1,7 @@
 from sqlalchemy import Column, ForeignKey, Boolean, Integer, String, Float, Text, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
+from sqlalchemy.schema import UniqueConstraint
 
 from . import config
 
@@ -25,6 +26,27 @@ class Item(Base):
             'label': self.label,
             'value': self.value,
             'is_abstract': self.is_abstract,
+        }
+
+class ItemSimilarityRelation(Base):
+    __tablename__ = 'item_similarity_relation'
+    __table_args__ = (
+        UniqueConstraint('item_id', 'another_item_id', name='_items_uc'),
+    )
+    id = Column(Integer, primary_key=True)
+    similarity = Column(Float)
+    item_id = Column(Integer, ForeignKey('item.id'))
+    another_item_id = Column(Integer, ForeignKey('item.id'))
+    item = relationship(Item, foreign_keys=[item_id])
+    another_item = relationship(Item, foreign_keys=[another_item_id])
+
+    def as_dict(self):
+        return {
+            'type': 'item_similarity_relation',
+            'id': self.id,
+            'similarity': self.similarity,
+            'item_id': self.item_id,
+            'another_item_id': self.another_item_id,
         }
 
 class ValidTime(Base):
