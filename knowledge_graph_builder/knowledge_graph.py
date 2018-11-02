@@ -408,7 +408,8 @@ class KnowledgeGraph:
         for prop in self.get_all_properties():
             yield prop.as_dict()
         for similarity in self.get_all_similarities():
-            yield similarity.as_dict()
+            if similarity.similarity > config.ITEM_MERGE_THRESHOLD:
+                yield similarity.as_dict()
 
     def dump_to_json_iter(self):
         for d in self.dump_to_dict_iter():
