@@ -50,8 +50,18 @@ Initialize your database with the script.
 Provide label data as lines of JSON objects 
 via standard input to `add_data.py` script.
 
+Input data should follow the rules denoted in the [knowledge-graph-input](https://github.com/uilab-vtt/knowledge-graph-input) repository.
+
 ```bash
 (env)knowledge-graph-builder$ python add_data.py < input_data.jsonl
+```
+
+#### Process the similar items
+
+Process similar items by running `merge_items` script.
+
+```bash
+(env)knowledge-graph-builder$ python merge_items.py
 ```
 
 #### Extract the knowledge graph
