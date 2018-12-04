@@ -158,6 +158,24 @@ class KnowledgeGraph:
             self.session.commit()
         return item
 
+    def create_item_with_coordinate(self, coordinate, seconds):
+        item = Item(
+            classname='unknown',
+            label='unknown',
+        )
+        self.session.add(item)
+        box = Box(
+            time=seconds,
+            x_start=coordinate[0],
+            x_end=coordinate[2],
+            y_start=coordinate[1],
+            y_end=coordinate[3],
+            item=item,
+        )
+        self.session.add(box)
+        self.session.commit()
+        return item
+
     def get_item_by_coordinate(self, coordinate, seconds):
         rows = self.get_overlapped_items_by_coordinate(coordinate, seconds)
         for item, valid_time, box in rows:
@@ -182,7 +200,10 @@ class KnowledgeGraph:
             abs_coord = self.get_absolute_coordinate(
                 indicator['coordinates']
             )
-            return self.get_item_by_coordinate(abs_coord, seconds)
+            item = self.get_item_by_coordinate(abs_coord, seconds)
+            if item is None:
+                item = self.create_item_with_coordinate(abs_coord, seconds)
+            return item
         else:
             logger.error(
                 'Failed to find an object with object indicator "%s"' 
