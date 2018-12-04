@@ -173,6 +173,12 @@ class KnowledgeGraph:
             item=item,
         )
         self.session.add(box)
+        valid_time = ValidTime(
+            time_start=seconds,
+            time_end=seconds,
+            item=item,
+        )
+        self.session.add(valid_time)
         self.session.commit()
         return item
 
