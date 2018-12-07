@@ -184,7 +184,7 @@ class KnowledgeGraph:
 
     def create_item_with_id_str(self, id_str, seconds):
         item = Item(
-            classname=id_str,
+            classname='item',
             label=id_str,
             id_str=id_str,
         )
