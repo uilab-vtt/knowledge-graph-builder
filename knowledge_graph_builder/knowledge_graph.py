@@ -182,6 +182,22 @@ class KnowledgeGraph:
         self.session.commit()
         return item
 
+    def create_item_with_id_str(self, id_str, seconds):
+        item = Item(
+            classname=id_str,
+            label=id_str,
+            id_str=id_str,
+        )
+        self.session.add(item)
+        valid_time = ValidTime(
+            time_start=seconds,
+            time_end=seconds,
+            item=item,
+        )
+        self.session.add(valid_time)
+        self.session.commit()
+        return item
+
     def get_item_by_coordinate(self, coordinate, seconds):
         rows = self.get_overlapped_items_by_coordinate(coordinate, seconds)
         for item, valid_time, box in rows:
@@ -201,7 +217,10 @@ class KnowledgeGraph:
 
     def get_item_by_indicator(self, indicator, seconds):
         if 'id' in indicator:
-            return self.get_item_by_id_str(indicator['id'])
+            item = self.get_item_by_id_str(indicator['id'])
+            if item is None:
+                item = self.create_item_with_id_str(indicator['id'], seconds)
+            return item
         elif 'coordinates' in indicator:
             abs_coord = self.get_absolute_coordinate(
                 indicator['coordinates']
